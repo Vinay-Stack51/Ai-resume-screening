@@ -3,3 +3,4 @@ pandas
 PyPDF2
 google-generativeai
 scikit-learn
+langchain langchain-google-genai
