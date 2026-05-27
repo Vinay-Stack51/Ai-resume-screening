@@ -1,11 +1,4 @@
 # =========================================
-# INSTALL REQUIRED PACKAGES
-# =========================================
-# pip install streamlit pandas PyPDF2 spacy scikit-learn
-# pip install langchain langchain-google-genai
-# python -m spacy download en_core_web_sm
-
-# =========================================
 # IMPORTS
 # =========================================
 import streamlit as st
@@ -19,15 +12,18 @@ from PyPDF2 import PdfReader
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-# LANGCHAIN
+# LANGCHAIN + GEMINI
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import PromptTemplate
 from langchain.chains import LLMChain
 
 # =========================================
-# LOAD SPACY MODEL
+# LOAD SPACY MODEL SAFELY
 # =========================================
-nlp = spacy.load("en_core_web_sm")
+try:
+    nlp = spacy.load("en_core_web_sm")
+except:
+    nlp = None
 
 # =========================================
 # PAGE CONFIG
@@ -38,7 +34,7 @@ st.set_page_config(
 )
 
 # =========================================
-# GEMINI + LANGCHAIN
+# GEMINI MODEL
 # =========================================
 llm = ChatGoogleGenerativeAI(
     model="gemini-2.5-flash",
@@ -47,7 +43,7 @@ llm = ChatGoogleGenerativeAI(
 )
 
 # =========================================
-# DATABASE
+# DATABASE INIT
 # =========================================
 def init_db():
 
@@ -91,8 +87,7 @@ def save_to_db(
     cursor = conn.cursor()
 
     cursor.execute("""
-        INSERT INTO candidates
-        (
+        INSERT INTO candidates (
             candidate_name,
             phone,
             cgpa,
@@ -121,7 +116,7 @@ def save_to_db(
 st.title("🤖 AI Resume Screening System")
 
 # =========================================
-# SKILLS
+# SKILLS & PROJECTS
 # =========================================
 ALL_SKILLS = [
     "Python",
@@ -188,7 +183,7 @@ uploaded_files = st.file_uploader(
 )
 
 # =========================================
-# EXTRACT TEXT
+# EXTRACT PDF TEXT
 # =========================================
 def extract_text(pdf_file):
 
@@ -226,7 +221,10 @@ def extract_cgpa(text):
 # =========================================
 def extract_phone(text):
 
-    match = re.search(r'\+?\d[\d\s\-]{8,15}', text)
+    match = re.search(
+        r'\+?\d[\d\s\-]{8,15}',
+        text
+    )
 
     return match.group(0) if match else "Not Found"
 
@@ -234,6 +232,9 @@ def extract_phone(text):
 # EXTRACT NAME
 # =========================================
 def extract_name(text):
+
+    if nlp is None:
+        return "Unknown"
 
     doc = nlp(text)
 
@@ -245,9 +246,12 @@ def extract_name(text):
     return "Unknown"
 
 # =========================================
-# LANGCHAIN SKILL EXTRACTION
+# AI SKILL EXTRACTION
 # =========================================
 def extract_skills_langchain(text):
+
+    if nlp is None:
+        return []
 
     doc = nlp(text.lower())
 
@@ -290,20 +294,24 @@ def extract_skills_langchain(text):
 
     try:
 
-        response = chain.run({
+        response = chain.invoke({
             "required_skills": required_skills,
             "resume_terms": combined
         })
 
+        response_text = response["text"]
+
         skills = [
             skill.strip()
-            for skill in response.split(",")
+            for skill in response_text.split(",")
             if skill.strip()
         ]
 
         return list(set(skills))
 
-    except:
+    except Exception as e:
+
+        st.error(f"Skill Extraction Error: {e}")
 
         return []
 
@@ -360,7 +368,7 @@ def hr_keywords_filter_dynamic(
     return False
 
 # =========================================
-# TF-IDF SCORE
+# TF-IDF SIMILARITY SCORE
 # =========================================
 def hr_description_score(
     resume_text,
@@ -385,7 +393,7 @@ def hr_description_score(
     return round(similarity * 100, 2)
 
 # =========================================
-# LANGCHAIN AI EVALUATION
+# GEMINI AI EVALUATION
 # =========================================
 def gemini_evaluate(
     resume_text,
@@ -432,10 +440,12 @@ def gemini_evaluate(
 
     try:
 
-        result_text = chain.run({
+        response = chain.invoke({
             "job_description": job_description,
             "resume_text": resume_text[:4000]
         })
+
+        result_text = response["text"]
 
         match = re.search(
             r'Match Percentage:\s*(\d{1,3})',
@@ -481,12 +491,14 @@ if st.button("🚀 Screen Candidates"):
 
             disqualified_reason = ""
 
+            # CGPA FILTER
             if cgpa < min_cgpa:
 
                 disqualified_reason += (
                     "Low CGPA | "
                 )
 
+            # KEYWORD FILTER
             keyword_match = (
                 hr_keywords_filter_dynamic(
                     text,
@@ -501,15 +513,19 @@ if st.button("🚀 Screen Candidates"):
                     "HR Keywords Not Matched | "
                 )
 
+            # SKILL MATCH
             skill_match = extract_skills_langchain(text)
 
+            # PROJECT MATCH
             project_match = extract_projects(text)
 
+            # TF-IDF SCORE
             hr_score = hr_description_score(
                 text,
                 hr_description
             )
 
+            # AI ANALYSIS
             with st.spinner(
                 f"AI analyzing {file.name}..."
             ):
@@ -521,6 +537,7 @@ if st.button("🚀 Screen Candidates"):
                     )
                 )
 
+            # FINAL SCORE
             final_score = round(
                 (
                     ai_score * 0.5
@@ -531,6 +548,7 @@ if st.button("🚀 Screen Candidates"):
                 2
             )
 
+            # DECISION
             if disqualified_reason:
 
                 ai_status = (
@@ -550,10 +568,12 @@ if st.button("🚀 Screen Candidates"):
 
                 ai_status = "Strong Hire ✅"
 
+            # NAME & PHONE
             name = extract_name(text)
 
             phone = extract_phone(text)
 
+            # SAVE TO DB
             save_to_db(
                 name,
                 phone,
@@ -564,6 +584,7 @@ if st.button("🚀 Screen Candidates"):
                 hr_score
             )
 
+            # STORE RESULT
             results.append({
                 "Candidate": name,
                 "Phone": phone,
@@ -577,13 +598,16 @@ if st.button("🚀 Screen Candidates"):
                 "AI Report": ai_result
             })
 
+        # CREATE DATAFRAME
         df = pd.DataFrame(results)
 
+        # SORT
         df = df.sort_values(
             by="Final Score",
             ascending=False
         )
 
+        # DISPLAY
         st.subheader("🏆 Candidate Ranking")
 
         st.dataframe(
@@ -591,6 +615,7 @@ if st.button("🚀 Screen Candidates"):
             use_container_width=True
         )
 
+        # AI REPORTS
         st.subheader("🧠 Detailed AI Reports")
 
         for index, row in df.iterrows():
