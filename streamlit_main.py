@@ -24,7 +24,10 @@ st.set_page_config(
     page_title="AI Resume Screening",
     layout="wide"
 )
+
+# BACKGROUND FUNCTION
 def set_bg(image_file):
+
     with open(image_file, "rb") as f:
         data = f.read()
 
@@ -44,6 +47,7 @@ def set_bg(image_file):
 
     st.markdown(page_bg, unsafe_allow_html=True)
 
+# CALL FUNCTION
 set_bg("background.png")
 
 # =========================================
