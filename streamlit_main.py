@@ -16,16 +16,17 @@ from sklearn.metrics.pairwise import cosine_similarity
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import PromptTemplate
 from langchain.chains import LLMChain
-
 # =========================================
-# PAGE CONFIG
+# PAGE CONFIG (MUST BE FIRST STREAMLIT CMD)
 # =========================================
 st.set_page_config(
     page_title="AI Resume Screening",
     layout="wide"
 )
 
+# =========================================
 # BACKGROUND FUNCTION
+# =========================================
 def set_bg(image_file):
 
     with open(image_file, "rb") as f:
@@ -47,7 +48,7 @@ def set_bg(image_file):
 
     st.markdown(page_bg, unsafe_allow_html=True)
 
-# CALL FUNCTION
+# CALL AFTER set_page_config
 set_bg("background.png")
 
 # =========================================
