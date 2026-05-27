@@ -1,6 +1,8 @@
 streamlit
 pandas
 PyPDF2
-google-generativeai
+spacy
 scikit-learn
-langchain langchain-google-genai
+langchain
+langchain-google-genai
+google-generativeai
