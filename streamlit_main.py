@@ -6,7 +6,7 @@ import pandas as pd
 import re
 import sqlite3
 import spacy
-
+import base64
 from PyPDF2 import PdfReader
 
 from sklearn.feature_extraction.text import TfidfVectorizer
