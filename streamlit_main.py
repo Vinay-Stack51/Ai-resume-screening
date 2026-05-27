@@ -1,107 +1,58 @@
+# =========================================
+# INSTALL REQUIRED PACKAGES
+# =========================================
+# pip install streamlit pandas PyPDF2 spacy scikit-learn
+# pip install langchain langchain-google-genai
+# python -m spacy download en_core_web_sm
+
+# =========================================
+# IMPORTS
+# =========================================
 import streamlit as st
 import pandas as pd
 import re
-import PyPDF2
-import google.generativeai as genai
+import sqlite3
+import spacy
+
+from PyPDF2 import PdfReader
+
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-import sqlite3
-import base64
 
-# -------------------------
-# Background Styling
-# -------------------------
-st.markdown("""
-<style>
+# LANGCHAIN
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain.prompts import PromptTemplate
+from langchain.chains import LLMChain
 
-/* Entire text area block */
-.stTextArea > div > div {
-    background-color: transparent !important;
-}
+# =========================================
+# LOAD SPACY MODEL
+# =========================================
+nlp = spacy.load("en_core_web_sm")
 
-/* Actual textarea */
-.stTextArea textarea {
-    background-color: transparent !important;
-    color: white !important;
-    border: 1px solid rgba(255,255,255,0.4) !important;
-    border-radius: 12px !important;
-    backdrop-filter: blur(10px);
-}
+# =========================================
+# PAGE CONFIG
+# =========================================
+st.set_page_config(
+    page_title="AI Resume Screening",
+    layout="wide"
+)
 
-/* Placeholder */
-.stTextArea textarea::placeholder {
-    color: rgba(255,255,255,0.6) !important;
-}
+# =========================================
+# GEMINI + LANGCHAIN
+# =========================================
+llm = ChatGoogleGenerativeAI(
+    model="gemini-2.5-flash",
+    google_api_key=st.secrets["GOOGLE_API_KEY"],
+    temperature=0.3
+)
 
-/* Selectbox */
-div[data-baseweb="select"] > div {
-    background-color: transparent !important;
-    border: 1px solid rgba(255,255,255,0.4) !important;
-    backdrop-filter: blur(8px);
-    color: white !important;
-}
-
-div[data-baseweb="select"] span {
-    color: white !important;
-}
-
-/* Dropdown popup */
-div[role="listbox"] {
-    background-color: transparent !important;
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255,255,255,0.3);
-    color: white !important;
-}
-
-/* Options */
-div[role="option"] {
-    background-color: transparent !important;
-    color: white !important;
-}
-
-div[role="option"]:hover {
-    background-color: rgba(255,255,255,0.2) !important;
-}
-
-</style>
-""", unsafe_allow_html=True)
-
-# -------------------------
-# Background Image
-# -------------------------
-def set_bg(image_file):
-    with open(image_file, "rb") as f:
-        data = f.read()
-
-    encoded = base64.b64encode(data).decode()
-
-    page_bg = f"""
-    <style>
-    .stApp {{
-        background-image: url("data:image/jpg;base64,{encoded}");
-        background-size: cover;
-        background-position: center;
-        background-repeat: no-repeat;
-        background-attachment: fixed;
-    }}
-    </style>
-    """
-
-    st.markdown(page_bg, unsafe_allow_html=True)
-
-set_bg("background.png")
-
-# -------------------------
-# Gemini API
-# -------------------------
-genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
-model = genai.GenerativeModel("gemini-2.5-flash")
-
-# -------------------------
-# SQLite Database
-# -------------------------
+# =========================================
+# DATABASE
+# =========================================
 def init_db():
+
     conn = sqlite3.connect("candidates.db")
+
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -122,145 +73,309 @@ def init_db():
 
 init_db()
 
-def save_to_db(name, phone, cgpa, final_score, ai_decision, ai_score, hr_similarity):
+# =========================================
+# SAVE TO DATABASE
+# =========================================
+def save_to_db(
+    name,
+    phone,
+    cgpa,
+    final_score,
+    ai_decision,
+    ai_score,
+    hr_similarity
+):
+
     conn = sqlite3.connect("candidates.db")
+
     cursor = conn.cursor()
 
     cursor.execute("""
         INSERT INTO candidates
-        (candidate_name, phone, cgpa, final_score, ai_decision, ai_score, hr_similarity)
+        (
+            candidate_name,
+            phone,
+            cgpa,
+            final_score,
+            ai_decision,
+            ai_score,
+            hr_similarity
+        )
         VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (name, phone, cgpa, final_score, ai_decision, ai_score, hr_similarity))
+    """, (
+        name,
+        phone,
+        cgpa,
+        final_score,
+        ai_decision,
+        ai_score,
+        hr_similarity
+    ))
 
     conn.commit()
     conn.close()
 
-# -------------------------
-# Streamlit Page
-# -------------------------
-st.set_page_config(page_title="Hybrid AI Recruitment Assistant", layout="wide")
+# =========================================
+# TITLE
+# =========================================
+st.title("🤖 AI Resume Screening System")
 
-st.title("🤖 Hybrid AI-Powered Recruitment Assistant")
-st.markdown("Rule-Based Filtering + Gemini Smart Evaluation + SQLite Storage")
-
-# -------------------------
-# Job Requirements
-# -------------------------
-st.header("📋 Job Requirements")
-
+# =========================================
+# SKILLS
+# =========================================
 ALL_SKILLS = [
-    "Python","Java","C++","SQL","Machine Learning","Data Science",
-    "Cloud","Web Development","AI","Deep Learning","NLP"
+    "Python",
+    "Java",
+    "C++",
+    "SQL",
+    "Machine Learning",
+    "Data Science",
+    "Cloud",
+    "Web Development",
+    "AI",
+    "Deep Learning",
+    "NLP"
 ]
 
 ALL_PROJECTS = [
-    "AI","Web Development","Mobile App","Data Science","Cloud","Cyber Security","ML"
+    "AI",
+    "Web Development",
+    "Mobile App",
+    "Data Science",
+    "Cloud",
+    "Cyber Security",
+    "ML"
 ]
 
-required_skills = st.multiselect("🧠 Required Skills", ALL_SKILLS)
-required_projects = st.multiselect("📁 Required Project Domains", ALL_PROJECTS)
-min_cgpa = st.slider("🎓 Minimum CGPA", 0.0, 10.0, 6.0, 0.1)
+# =========================================
+# JOB REQUIREMENTS
+# =========================================
+st.header("📋 Job Requirements")
 
-# -------------------------
-# Job Description
-# -------------------------
+required_skills = st.multiselect(
+    "Required Skills",
+    ALL_SKILLS
+)
+
+required_projects = st.multiselect(
+    "Required Projects",
+    ALL_PROJECTS
+)
+
+min_cgpa = st.slider(
+    "Minimum CGPA",
+    0.0,
+    10.0,
+    6.0,
+    0.1
+)
+
+# =========================================
+# JOB DESCRIPTION
+# =========================================
 hr_description = st.text_area(
-    "✍️ Full Job Description",
+    "Job Description",
     height=150
 )
 
-# -------------------------
-# Upload PDFs
-# -------------------------
+# =========================================
+# FILE UPLOAD
+# =========================================
 uploaded_files = st.file_uploader(
-    "📄 Upload Resume PDFs",
+    "Upload Resume PDFs",
     type=["pdf"],
     accept_multiple_files=True
 )
 
-# -------------------------
-# Helper Functions
-# -------------------------
+# =========================================
+# EXTRACT TEXT
+# =========================================
 def extract_text(pdf_file):
-    reader = PyPDF2.PdfReader(pdf_file)
+
+    reader = PdfReader(pdf_file)
+
     text = ""
 
     for page in reader.pages:
-        if page.extract_text():
-            text += page.extract_text()
+
+        extracted = page.extract_text()
+
+        if extracted:
+            text += extracted
 
     return text.lower()
 
+# =========================================
+# EXTRACT CGPA
+# =========================================
 def extract_cgpa(text):
+
     matches = re.findall(r"(\d\.\d{1,2})", text)
 
     for m in matches:
-        val = float(m)
 
-        if val <= 10:
-            return val
+        value = float(m)
+
+        if value <= 10:
+            return value
 
     return 0.0
 
+# =========================================
+# EXTRACT PHONE
+# =========================================
 def extract_phone(text):
+
     match = re.search(r'\+?\d[\d\s\-]{8,15}', text)
+
     return match.group(0) if match else "Not Found"
 
+# =========================================
+# EXTRACT NAME
+# =========================================
 def extract_name(text):
-    lines = text.split("\n")
 
-    for line in lines[:5]:
-        clean = line.strip()
+    doc = nlp(text)
 
-        if len(clean.split()) <= 4 and clean.replace(" ", "").isalpha():
-            return clean
+    for ent in doc.ents:
+
+        if ent.label_ == "PERSON":
+            return ent.text
 
     return "Unknown"
 
-def keyword_filter(text):
+# =========================================
+# LANGCHAIN SKILL EXTRACTION
+# =========================================
+def extract_skills_langchain(text):
+
+    doc = nlp(text.lower())
+
+    tokens = [
+        token.text.strip()
+        for token in doc
+    ]
+
+    noun_chunks = [
+        chunk.text.strip()
+        for chunk in doc.noun_chunks
+    ]
+
+    combined = tokens + noun_chunks
+
+    template = """
+    You are an HR skill analyzer.
+
+    REQUIRED SKILLS:
+    {required_skills}
+
+    RESUME TERMS:
+    {resume_terms}
+
+    Return ONLY matched skills separated by commas.
+    """
+
+    prompt = PromptTemplate(
+        input_variables=[
+            "required_skills",
+            "resume_terms"
+        ],
+        template=template
+    )
+
+    chain = LLMChain(
+        llm=llm,
+        prompt=prompt
+    )
+
+    try:
+
+        response = chain.run({
+            "required_skills": required_skills,
+            "resume_terms": combined
+        })
+
+        skills = [
+            skill.strip()
+            for skill in response.split(",")
+            if skill.strip()
+        ]
+
+        return list(set(skills))
+
+    except:
+
+        return []
+
+# =========================================
+# PROJECT MATCH
+# =========================================
+def extract_projects(text):
+
+    matches = []
+
     text_lower = text.lower()
 
-    skill_matches = [
-        skill for skill in required_skills
-        if skill.lower() in text_lower
-    ]
+    for proj in required_projects:
 
-    project_matches = [
-        proj for proj in required_projects
-        if proj.lower() in text_lower
-    ]
+        if proj.lower() in text_lower:
+            matches.append(proj)
 
-    return skill_matches, project_matches
+    return matches
 
-def hr_keywords_filter_dynamic(resume_text, hr_desc, selected_projects):
+# =========================================
+# HR KEYWORD FILTER
+# =========================================
+def hr_keywords_filter_dynamic(
+    resume_text,
+    hr_desc,
+    selected_projects
+):
 
     resume_text_lower = resume_text.lower()
+
     hr_desc_lower = hr_desc.lower()
 
     hr_keywords = [
-        w for w in re.findall(r'\b\w{3,}\b', hr_desc_lower)
+        w for w in re.findall(
+            r'\b\w{3,}\b',
+            hr_desc_lower
+        )
     ]
 
     project_keywords = [
-        p.lower() for p in selected_projects
+        p.lower()
+        for p in selected_projects
     ]
 
-    all_keywords = set(hr_keywords + project_keywords)
+    all_keywords = set(
+        hr_keywords + project_keywords
+    )
 
     for kw in all_keywords:
+
         if kw in resume_text_lower:
             return True
 
     return False
 
-def hr_description_score(resume_text, hr_desc):
+# =========================================
+# TF-IDF SCORE
+# =========================================
+def hr_description_score(
+    resume_text,
+    hr_desc
+):
 
     if not hr_desc.strip():
         return 0
 
     vectorizer = TfidfVectorizer()
 
-    vectors = vectorizer.fit_transform([resume_text, hr_desc])
+    vectors = vectorizer.fit_transform([
+        resume_text,
+        hr_desc
+    ])
 
     similarity = cosine_similarity(
         vectors[0:1],
@@ -269,60 +384,90 @@ def hr_description_score(resume_text, hr_desc):
 
     return round(similarity * 100, 2)
 
-# -------------------------
-# Gemini Evaluation
-# -------------------------
-def gemini_evaluate(resume_text, job_description):
+# =========================================
+# LANGCHAIN AI EVALUATION
+# =========================================
+def gemini_evaluate(
+    resume_text,
+    job_description
+):
 
-    prompt = f"""
-You are an expert HR recruiter.
+    template = """
+    You are an expert HR recruiter.
 
-JOB DESCRIPTION:
-{job_description}
+    JOB DESCRIPTION:
+    {job_description}
 
-RESUME:
-{resume_text[:4000]}
+    RESUME:
+    {resume_text}
 
-Provide output in this format:
+    Provide output in this format:
 
-Match Percentage: 0-100
-Strengths:
-- point1
-- point2
+    Match Percentage: 0-100
 
-Missing Skills:
-- point1
-- point2
+    Strengths:
+    - point1
+    - point2
 
-Final Recommendation: Strong Hire / Consider / Reject
-"""
+    Missing Skills:
+    - point1
+    - point2
+
+    Final Recommendation:
+    Strong Hire / Consider / Reject
+    """
+
+    prompt = PromptTemplate(
+        input_variables=[
+            "job_description",
+            "resume_text"
+        ],
+        template=template
+    )
+
+    chain = LLMChain(
+        llm=llm,
+        prompt=prompt
+    )
 
     try:
-        response = model.generate_content(prompt)
 
-        result_text = response.text
+        result_text = chain.run({
+            "job_description": job_description,
+            "resume_text": resume_text[:4000]
+        })
 
         match = re.search(
             r'Match Percentage:\s*(\d{1,3})',
             result_text
         )
 
-        match_score = int(match.group(1)) if match else 0
+        match_score = int(
+            match.group(1)
+        ) if match else 0
 
         return result_text, match_score
 
     except Exception as e:
+
         return f"Error: {str(e)}", 0
-# -------------------------
-# Main Screening
-# -------------------------
+
+# =========================================
+# MAIN SCREENING
+# =========================================
 if st.button("🚀 Screen Candidates"):
 
     if not hr_description.strip():
-        st.warning("Please enter Job Description.")
+
+        st.warning(
+            "Please enter Job Description."
+        )
 
     elif not uploaded_files:
-        st.warning("Please upload resumes.")
+
+        st.warning(
+            "Please upload resumes."
+        )
 
     else:
 
@@ -334,49 +479,48 @@ if st.button("🚀 Screen Candidates"):
 
             cgpa = extract_cgpa(text)
 
-            # -------------------------
-            # Disqualification Checks
-            # -------------------------
             disqualified_reason = ""
 
             if cgpa < min_cgpa:
-                disqualified_reason += "Low CGPA | "
 
-            keyword_match = hr_keywords_filter_dynamic(
-                text,
-                hr_description,
-                required_projects
+                disqualified_reason += (
+                    "Low CGPA | "
+                )
+
+            keyword_match = (
+                hr_keywords_filter_dynamic(
+                    text,
+                    hr_description,
+                    required_projects
+                )
             )
 
             if not keyword_match:
-                disqualified_reason += "HR Keywords Not Matched | "
 
-            # -------------------------
-            # Skill Matching
-            # -------------------------
-            skill_match, project_match = keyword_filter(text)
+                disqualified_reason += (
+                    "HR Keywords Not Matched | "
+                )
 
-            # -------------------------
-            # HR Similarity Score
-            # -------------------------
+            skill_match = extract_skills_langchain(text)
+
+            project_match = extract_projects(text)
+
             hr_score = hr_description_score(
                 text,
                 hr_description
             )
 
-            # -------------------------
-            # Gemini Evaluation
-            # -------------------------
-            with st.spinner(f"Gemini analyzing {file.name}..."):
+            with st.spinner(
+                f"AI analyzing {file.name}..."
+            ):
 
-                ai_result, ai_score = gemini_evaluate(
-                    text,
-                    hr_description
+                ai_result, ai_score = (
+                    gemini_evaluate(
+                        text,
+                        hr_description
+                    )
                 )
 
-            # -------------------------
-            # Final Score
-            # -------------------------
             final_score = round(
                 (
                     ai_score * 0.5
@@ -387,12 +531,12 @@ if st.button("🚀 Screen Candidates"):
                 2
             )
 
-            # -------------------------
-            # Final Status
-            # -------------------------
             if disqualified_reason:
 
-                ai_status = f"Disqualified ❌ ({disqualified_reason})"
+                ai_status = (
+                    f"Disqualified ❌ "
+                    f"({disqualified_reason})"
+                )
 
             elif final_score < 40:
 
@@ -406,16 +550,10 @@ if st.button("🚀 Screen Candidates"):
 
                 ai_status = "Strong Hire ✅"
 
-            # -------------------------
-            # Extract Candidate Details
-            # -------------------------
             name = extract_name(text)
 
             phone = extract_phone(text)
 
-            # -------------------------
-            # Save to Database
-            # -------------------------
             save_to_db(
                 name,
                 phone,
@@ -426,15 +564,12 @@ if st.button("🚀 Screen Candidates"):
                 hr_score
             )
 
-            # -------------------------
-            # Store Results
-            # -------------------------
             results.append({
                 "Candidate": name,
                 "Phone": phone,
                 "CGPA": cgpa,
-                "Skill Matches": ", ".join(skill_match) if skill_match else "None",
-                "Project Matches": ", ".join(project_match) if project_match else "None",
+                "Skill Matches": ", ".join(skill_match),
+                "Project Matches": ", ".join(project_match),
                 "HR Similarity %": hr_score,
                 "AI Score": ai_score,
                 "Final Score": final_score,
@@ -442,63 +577,52 @@ if st.button("🚀 Screen Candidates"):
                 "AI Report": ai_result
             })
 
-        # -------------------------
-        # Display Results
-        # -------------------------
-        if not results:
+        df = pd.DataFrame(results)
 
-            st.warning("No resumes processed.")
+        df = df.sort_values(
+            by="Final Score",
+            ascending=False
+        )
 
-        else:
+        st.subheader("🏆 Candidate Ranking")
 
-            df = pd.DataFrame(results)
+        st.dataframe(
+            df.drop(columns=["AI Report"]),
+            use_container_width=True
+        )
 
-            df = df.sort_values(
-                by="Final Score",
-                ascending=False
-            ).reset_index(drop=True)
+        st.subheader("🧠 Detailed AI Reports")
 
-            st.subheader("🏆 Candidate Ranking")
+        for index, row in df.iterrows():
 
-            st.dataframe(
-                df.drop(columns=["AI Report"]),
-                use_container_width=True
-            )
+            with st.expander(
+                f"{row['Candidate']} - {row['Final Score']}"
+            ):
 
-            # -------------------------
-            # AI Detailed Reports
-            # -------------------------
-            st.subheader("🧠 Detailed AI Reports")
+                st.write(
+                    f"📞 Phone: {row['Phone']}"
+                )
 
-            for index, row in df.iterrows():
+                st.write(
+                    f"🎓 CGPA: {row['CGPA']}"
+                )
 
-                with st.expander(
-                    f"{row['Candidate']} - {row['Final Score']}"
-                ):
+                st.write(
+                    f"🤖 Decision: {row['AI Decision']}"
+                )
 
-                    st.write(f"📞 Phone: {row['Phone']}")
-                    st.write(f"🎓 CGPA: {row['CGPA']}")
-                    st.write(f"🤖 Decision: {row['AI Decision']}")
+                st.write(
+                    row["AI Report"]
+                )
 
-                    st.write(row["AI Report"])
-
-            # -------------------------
-            # CSV Download
-            # -------------------------
-            csv = df.to_csv(index=False).encode("utf-8")
-
-            st.download_button(
-                "📥 Download Full Report",
-                csv,
-                "Candidate_Report.csv",
-                "text/csv"
-            )
-# -------------------------
-# View Stored Candidates
-# -------------------------
+# =========================================
+# VIEW DATABASE
+# =========================================
 if st.button("📂 View Stored Candidates"):
 
-    conn = sqlite3.connect("candidates.db")
+    conn = sqlite3.connect(
+        "candidates.db"
+    )
 
     df_db = pd.read_sql_query(
         "SELECT * FROM candidates",
@@ -507,25 +631,30 @@ if st.button("📂 View Stored Candidates"):
 
     conn.close()
 
-    st.subheader("📊 Stored Candidates Database")
-
     st.dataframe(
         df_db,
         use_container_width=True
     )
-# -------------------------
-# Reset Database Button
-# -------------------------
+
+# =========================================
+# RESET DATABASE
+# =========================================
 if st.button("🗑 Reset Database"):
 
-    conn = sqlite3.connect("candidates.db")
+    conn = sqlite3.connect(
+        "candidates.db"
+    )
 
     cursor = conn.cursor()
 
-    cursor.execute("DELETE FROM candidates")
+    cursor.execute(
+        "DELETE FROM candidates"
+    )
 
     conn.commit()
 
     conn.close()
 
-    st.success("Database cleared successfully ✅")
+    st.success(
+        "Database cleared successfully ✅"
+    )
