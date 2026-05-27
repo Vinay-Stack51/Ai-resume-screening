@@ -2,6 +2,15 @@
 # IMPORTS
 # =========================================
 import streamlit as st
+
+# =========================================
+# PAGE CONFIG (MUST BE FIRST STREAMLIT CMD)
+# =========================================
+st.set_page_config(
+    page_title="AI Resume Screening",
+    layout="wide"
+)
+
 import pandas as pd
 import re
 import sqlite3
@@ -16,13 +25,6 @@ from sklearn.metrics.pairwise import cosine_similarity
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import PromptTemplate
 from langchain.chains import LLMChain
-# =========================================
-# PAGE CONFIG (MUST BE FIRST STREAMLIT CMD)
-# =========================================
-st.set_page_config(
-    page_title="AI Resume Screening",
-    layout="wide"
-)
 
 # =========================================
 # BACKGROUND FUNCTION
@@ -37,7 +39,7 @@ def set_bg(image_file):
     page_bg = f"""
     <style>
     .stApp {{
-        background-image: url("data:image/jpg;base64,{encoded}");
+        background-image: url("data:image/png;base64,{encoded}");
         background-size: cover;
         background-position: center;
         background-repeat: no-repeat;
@@ -48,8 +50,11 @@ def set_bg(image_file):
 
     st.markdown(page_bg, unsafe_allow_html=True)
 
-# CALL AFTER set_page_config
+# =========================================
+# APPLY BACKGROUND
+# =========================================
 set_bg("background.png")
+
 
 # =========================================
 # LOAD SPACY MODEL SAFELY
