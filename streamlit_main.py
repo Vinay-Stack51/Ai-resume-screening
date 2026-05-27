@@ -4,7 +4,8 @@
 import streamlit as st
 
 # =========================================
-# PAGE CONFIG (MUST BE FIRST STREAMLIT CMD)
+# PAGE CONFIG
+# MUST BE FIRST STREAMLIT COMMAND
 # =========================================
 st.set_page_config(
     page_title="AI Resume Screening",
@@ -16,6 +17,7 @@ import re
 import sqlite3
 import spacy
 import base64
+
 from PyPDF2 import PdfReader
 
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -25,6 +27,14 @@ from sklearn.metrics.pairwise import cosine_similarity
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import PromptTemplate
 from langchain.chains import LLMChain
+
+# =========================================
+# LOAD SPACY MODEL SAFELY
+# =========================================
+try:
+    nlp = spacy.load("en_core_web_sm")
+except:
+    nlp = None
 
 # =========================================
 # BACKGROUND FUNCTION
@@ -45,6 +55,12 @@ def set_bg(image_file):
         background-repeat: no-repeat;
         background-attachment: fixed;
     }}
+
+    .block-container {{
+        background-color: rgba(255,255,255,0.88);
+        padding: 2rem;
+        border-radius: 15px;
+    }}
     </style>
     """
 
@@ -55,22 +71,11 @@ def set_bg(image_file):
 # =========================================
 set_bg("background.png")
 
-
-# =========================================
-# LOAD SPACY MODEL SAFELY
-# =========================================
-try:
-    nlp = spacy.load("en_core_web_sm")
-except:
-    nlp = None
-
-
-
 # =========================================
 # GEMINI MODEL
 # =========================================
 llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash",
+    model="gemini-1.5-flash",
     google_api_key=st.secrets["GOOGLE_API_KEY"],
     temperature=0.3
 )
@@ -229,9 +234,9 @@ def extract_text(pdf_file):
         extracted = page.extract_text()
 
         if extracted:
-            text += extracted
+            text += extracted + " "
 
-    return text.lower()
+    return text
 
 # =========================================
 # EXTRACT CGPA
@@ -269,70 +274,104 @@ def extract_name(text):
     if nlp is None:
         return "Unknown"
 
-    doc = nlp(text)
+    try:
 
-    for ent in doc.ents:
+        doc = nlp(text[:1500])
 
-        if ent.label_ == "PERSON":
-            return ent.text
+        for ent in doc.ents:
+
+            if ent.label_ == "PERSON":
+
+                name = ent.text.strip()
+
+                if len(name.split()) >= 2:
+                    return name.title()
+
+        # FALLBACK METHOD
+        lines = text.split("\n")
+
+        for line in lines[:10]:
+
+            line = line.strip()
+
+            if not line:
+                continue
+
+            if "@" in line:
+                continue
+
+            if re.search(r"\d", line):
+                continue
+
+            words = line.split()
+
+            if 2 <= len(words) <= 4:
+                return line.title()
+
+    except:
+        pass
 
     return "Unknown"
 
 # =========================================
 # AI SKILL EXTRACTION
 # =========================================
+# =========================================
+# AI SKILL EXTRACTION
+# =========================================
 def extract_skills_langchain(text):
-
-    if nlp is None:
-        return []
-
-    doc = nlp(text.lower())
-
-    tokens = [
-        token.text.strip()
-        for token in doc
-    ]
-
-    noun_chunks = [
-        chunk.text.strip()
-        for chunk in doc.noun_chunks
-    ]
-
-    combined = tokens + noun_chunks
-
-    template = """
-    You are an HR skill analyzer.
-
-    REQUIRED SKILLS:
-    {required_skills}
-
-    RESUME TERMS:
-    {resume_terms}
-
-    Return ONLY matched skills separated by commas.
-    """
-
-    prompt = PromptTemplate(
-        input_variables=[
-            "required_skills",
-            "resume_terms"
-        ],
-        template=template
-    )
-
-    chain = LLMChain(
-        llm=llm,
-        prompt=prompt
-    )
 
     try:
 
+        text_lower = text.lower()
+
+        matched_skills = []
+
+        # DIRECT MATCHING
+        for skill in ALL_SKILLS:
+
+            if skill.lower() in text_lower:
+                matched_skills.append(skill)
+
+        # REMOVE DUPLICATES
+        matched_skills = list(set(matched_skills))
+
+        # IF DIRECT MATCH FOUND
+        if matched_skills:
+            return matched_skills
+
+        # FALLBACK TO GEMINI
+        template = """
+        Extract technical skills from this resume.
+
+        Resume:
+        {resume_text}
+
+        Return ONLY comma separated skills.
+        """
+
+        prompt = PromptTemplate(
+            input_variables=["resume_text"],
+            template=template
+        )
+
+        chain = LLMChain(
+            llm=llm,
+            prompt=prompt
+        )
+
         response = chain.invoke({
-            "required_skills": required_skills,
-            "resume_terms": combined
+            "resume_text": text[:3000]
         })
 
-        response_text = response["text"]
+        # NEW LANGCHAIN RESPONSE FORMAT
+        if isinstance(response, dict):
+
+            response_text = response.get("text", "")
+
+        else:
+
+            response_text = response.content
 
         skills = [
             skill.strip()
@@ -606,7 +645,7 @@ if st.button("🚀 Screen Candidates"):
 
             phone = extract_phone(text)
 
-            # SAVE TO DB
+            # SAVE TO DATABASE
             save_to_db(
                 name,
                 phone,
