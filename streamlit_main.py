@@ -263,48 +263,49 @@ def extract_phone(text):
 # =========================================
 def extract_name(text):
 
-    if nlp is None:
-        return "Unknown"
-
     try:
 
-        doc = nlp(text[:1500])
-
-        for ent in doc.ents:
-
-            if ent.label_ == "PERSON":
-
-                name = ent.text.strip()
-
-                if len(name.split()) >= 2:
-                    return name.title()
-
-        # FALLBACK METHOD
+        # FIRST 15 LINES
         lines = text.split("\n")
 
-        for line in lines[:10]:
+        for line in lines[:15]:
 
             line = line.strip()
 
+            # REMOVE EMPTY LINES
             if not line:
                 continue
 
+            # REMOVE EMAIL/PHONE LINES
             if "@" in line:
                 continue
 
-            if re.search(r"\d", line):
+            if re.search(r'\d', line):
                 continue
 
+            # SHORT NAME CHECK
             words = line.split()
 
             if 2 <= len(words) <= 4:
+
                 return line.title()
 
+        # FALLBACK SPACY
+        if nlp:
+
+            doc = nlp(text)
+
+            for ent in doc.ents:
+
+                if ent.label_ == "PERSON":
+
+                    return ent.text.title()
+
+        return "Unknown"
+
     except:
-        pass
 
-    return "Unknown"
-
+        return "Unknown"
 # =========================================
 # AI SKILL EXTRACTION
 # =========================================
