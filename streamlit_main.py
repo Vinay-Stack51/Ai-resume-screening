@@ -35,9 +35,6 @@ try:
     nlp = spacy.load("en_core_web_sm")
 except:
     nlp = None
-# =========================================
-# BACKGROUND FUNCTION
-# =========================================
 def set_bg(image_file):
 
     with open(image_file, "rb") as f:
@@ -54,38 +51,6 @@ def set_bg(image_file):
         background-position: center;
         background-repeat: no-repeat;
         background-attachment: fixed;
-    }}
-
-    /* DARK OVERLAY FOR READABILITY */
-    .main {{
-        background-color: rgba(0, 0, 0, 0.45);
-        border-radius: 15px;
-        padding: 20px;
-    }}
-
-    /* TEXT COLORS */
-    h1, h2, h3, h4, h5, h6, p, label, div {{
-        color: white !important;
-    }}
-
-    /* INPUT BOXES */
-    .stTextInput input,
-    .stTextArea textarea,
-    .stSelectbox div,
-    .stMultiSelect div {{
-        background-color: rgba(255,255,255,0.9) !important;
-        color: black !important;
-        border-radius: 10px;
-    }}
-
-    /* BUTTONS */
-    .stButton button {{
-        background-color: #ff4b4b;
-        color: white;
-        border-radius: 10px;
-        border: none;
-        padding: 10px 20px;
-        font-weight: bold;
     }}
 
     </style>
