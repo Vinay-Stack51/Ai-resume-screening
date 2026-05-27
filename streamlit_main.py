@@ -17,6 +17,29 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import PromptTemplate
 from langchain.chains import LLMChain
 
+
+def set_bg(image_file):
+    with open(image_file, "rb") as f:
+        data = f.read()
+
+    encoded = base64.b64encode(data).decode()
+
+    page_bg = f"""
+    <style>
+    .stApp {{
+        background-image: url("data:image/jpg;base64,{encoded}");
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        background-attachment: fixed;
+    }}
+    </style>
+    """
+
+    st.markdown(page_bg, unsafe_allow_html=True)
+
+set_bg("background.png")
+
 # =========================================
 # LOAD SPACY MODEL SAFELY
 # =========================================
