@@ -55,14 +55,7 @@ def set_bg(image_file):
 
     </style>
     """
-st.markdown("""
-<style>
-.stTextArea textarea {
-    background-color: white !important;
-    color: black !important;
-}
-</style>
-""", unsafe_allow_html=True)
+
 
 # Your widgets below
 job_description = st.text_area("Job Description")
