@@ -42,7 +42,7 @@ def set_bg(image_file):
 
     encoded = base64.b64encode(data).decode()
 
-    page_bg = f"""
+   page_bg = f"""
     <style>
 
     .stApp {{
@@ -55,6 +55,8 @@ def set_bg(image_file):
 
     </style>
     """
+
+    st.markdown(page_bg, unsafe_allow_html=True)
 
 
 # Your widgets below
