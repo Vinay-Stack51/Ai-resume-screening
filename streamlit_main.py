@@ -701,9 +701,20 @@ if st.button("🚀 Screen Candidates"):
                     f"🤖 Decision: {row['AI Decision']}"
                 )
 
-                st.write(
-                    row["AI Report"]
-                )
+                st.markdown(
+    f"""
+    <div style="
+        background-color:black;
+        color:white;
+        padding:15px;
+        border-radius:10px;
+        white-space:pre-wrap;
+    ">
+        {row["AI Report"]}
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
 # =========================================
 # VIEW DATABASE
