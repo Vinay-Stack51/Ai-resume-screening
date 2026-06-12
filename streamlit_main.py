@@ -195,13 +195,13 @@ min_cgpa = st.slider(
     0.1
 )
 
-# =========================================
-# JOB DESCRIPTION
-# =========================================
-hr_description = st.text_area(
-    "Job Description",
-    height=150
-)
+# # =========================================
+# # JOB DESCRIPTION
+# # =========================================
+# hr_description = st.text_area(
+#     "Job Description",
+#     height=150
+# )
 
 # =========================================
 # FILE UPLOAD
