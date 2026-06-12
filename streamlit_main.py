@@ -61,7 +61,7 @@ def set_bg(image_file):
 # =========================================
 # APPLY BACKGROUND
 # =========================================
-set_bg("background.png")
+set_bg("background.jpg")
 
 # =========================================
 # GEMINI MODEL
