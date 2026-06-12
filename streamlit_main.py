@@ -42,9 +42,9 @@ def set_bg(image_file):
 
     encoded = base64.b64encode(data).decode()
 
-   page_bg = f"""
+    page_bg = f"""
     <style>
-
+    
     .stApp {{
         background-image: url("data:image/png;base64,{encoded}");
         background-size: cover;
@@ -52,10 +52,10 @@ def set_bg(image_file):
         background-repeat: no-repeat;
         background-attachment: fixed;
     }}
-
+    
     </style>
     """
-
+    
     st.markdown(page_bg, unsafe_allow_html=True)
 
 
