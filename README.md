@@ -2,7 +2,7 @@
 
 ## Overview
 
-RecruitIQ is an AI-powered resume screening and candidate ranking platform designed to automate the initial stages of recruitment. The system uses a multi-agent architecture to analyze resumes, extract candidate information, evaluate skills, compare resumes against job descriptions, and generate AI-driven hiring recommendations.
+RecruitIQ is an AI-powered resume screening and candidate ranking platform designed to automate the initial stages of recruitment. The system uses a multi-agent architecture to analyze resumes, extract candidate information, evaluate skills, compare resumes against job descriptions and generate AI-driven hiring recommendations.
 
 The platform helps recruiters reduce manual screening effort while improving consistency and decision-making.
 
@@ -130,7 +130,7 @@ The system consists of nine specialized AI agents:
 ### Clone Repository
 
 ```bash
-git clone [https://github.com/yourusername/recruitiq.git](https://github.com/Vinay-Stack51/Ai-resume-screening)
+git clone (https://github.com/Vinay-Stack51/Ai-resume-screening)
 cd Ai-resume-screening
 ```
 
