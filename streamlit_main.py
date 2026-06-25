@@ -483,22 +483,72 @@ def tool_extract_academic_info(text: str) -> dict:
 
     return {"cgpa": cgpa, "education_level": education_level, "years_exp": years_exp}
 
+import re
+import json
+import spacy
+
+nlp = spacy.load("en_core_web_sm")
+
 def tool_skill_matcher(text: str, required_skills: list) -> dict:
-    """Agent Tool: Match skills from resume against required skills."""
+
     text_lower = text.lower()
+
+    # Existing keyword extraction
     found_skills = []
+
     for skill in ALL_SKILLS:
-        pattern = r'\b' + re.escape(skill.lower()) + r'\b'
+        pattern = r"\b" + re.escape(skill.lower()) + r"\b"
+
         if re.search(pattern, text_lower):
             found_skills.append(skill)
-    matched = [s for s in required_skills if s in found_skills]
-    missing = [s for s in required_skills if s not in found_skills]
-    extra = [s for s in found_skills if s not in required_skills]
+
+    # spaCy NLP extraction
+    doc = nlp(text)
+
+    candidate_terms = set()
+
+    # nouns & proper nouns
+    for token in doc:
+        if token.pos_ in ["NOUN", "PROPN"]:
+            if len(token.text.strip()) > 2:
+                candidate_terms.add(token.text.lower())
+
+    # noun chunks
+    for chunk in doc.noun_chunks:
+        phrase = chunk.text.strip().lower()
+
+        if len(phrase) > 2:
+            candidate_terms.add(phrase)
+
+    candidate_terms.update(
+        [s.lower() for s in found_skills]
+    )
+
+    # keyword matches (Gemini will improve later)
+    matched = [
+        skill
+        for skill in required_skills
+        if skill in found_skills
+    ]
+
+    missing = [
+        skill
+        for skill in required_skills
+        if skill not in found_skills
+    ]
+
+    extra = [
+        skill
+        for skill in found_skills
+        if skill not in required_skills
+    ]
+
     return {
         "extracted_skills": found_skills,
         "matched_skills": matched,
         "missing_skills": missing,
-        "extra_skills": extra
+        "extra_skills": extra,
+        "candidate_terms": sorted(list(candidate_terms))
     }
 
 def tool_project_analyzer(text: str, required_projects: list) -> dict:
@@ -520,40 +570,120 @@ def tool_tfidf_similarity(resume_text: str, jd_text: str) -> float:
     score = cosine_similarity(vecs[0:1], vecs[1:2])[0][0]
     return round(score * 100, 2)
 
-def tool_gemini_deep_analyze(resume_text: str, jd: str, role: str) -> dict:
-    """Agent Tool: Deep AI analysis via Gemini."""
-    template = """You are an expert AI recruiter agent. Analyze this resume deeply.
+def tool_gemini_deep_analyze(
+    resume_text: str,
+    jd: str,
+    role: str,
+    extracted_skills: list,
+    candidate_terms: list
+) -> dict:
 
-ROLE: {role}
-JOB DESCRIPTION: {jd}
+    template = """
+You are an expert AI recruiter and technical hiring specialist.
+
+ROLE:
+{role}
+
+JOB DESCRIPTION:
+{jd}
+
+EXTRACTED SKILLS:
+{skills}
+
+EXTRACTED CANDIDATE CONCEPTS:
+{candidate_terms}
 
 RESUME:
 {resume}
 
-Return ONLY a JSON object (no markdown, no explanation) with these exact keys:
+Instructions:
+
+- Use semantic reasoning, not just keyword matching.
+- Consider related technologies as relevant.
+- Evaluate technical depth.
+- Infer transferable skills.
+- Compare candidate concepts against job requirements.
+
+Return ONLY valid JSON.
+
 {{
-  "match_score": <0-100 integer>,
-  "culture_fit_score": <0-100 integer>,
-  "strengths": ["point1","point2","point3"],
-  "red_flags": ["flag1","flag2"],
-  "missing_skills": ["skill1","skill2"],
-  "recommendation": "Strong Hire" | "Consider" | "Reject",
-  "reasoning": "2-3 sentence explanation",
-  "salary_estimate": "range like 6-9 LPA or N/A",
-  "interview_questions": ["q1","q2","q3","q4","q5"]
-}}"""
-    prompt = PromptTemplate(input_variables=["role","jd","resume"], template=template)
-    chain = LLMChain(llm=llm, prompt=prompt)
+"match_score": <0-100 integer>,
+"culture_fit_score": <0-100 integer>,
+"strengths": ["point1","point2","point3"],
+"red_flags": ["flag1","flag2"],
+"missing_skills": ["skill1","skill2"],
+"related_skills": ["skill1","skill2"],
+"recommendation": "Strong Hire" | "Consider" | "Reject",
+"reasoning": "2-3 sentence explanation",
+"salary_estimate": "range like 6-9 LPA or N/A",
+"interview_questions": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5"
+]
+}}
+"""
+
+    prompt = PromptTemplate(
+        input_variables=[
+            "role",
+            "jd",
+            "skills",
+            "candidate_terms",
+            "resume"
+        ],
+        template=template
+    )
+
+    chain = LLMChain(
+        llm=llm,
+        prompt=prompt
+    )
+
     try:
-        response = chain.invoke({"role": role, "jd": jd, "resume": resume_text[:5000]})
-        text = response.get("text", "") if isinstance(response, dict) else response.content
-        text = re.sub(r'```json|```', '', text).strip()
+
+        response = chain.invoke({
+            "role": role,
+            "jd": jd,
+            "skills": json.dumps(extracted_skills),
+            "candidate_terms": json.dumps(candidate_terms[:300]),
+            "resume": resume_text[:5000]
+        })
+
+        text = (
+            response.get("text", "")
+            if isinstance(response, dict)
+            else response.content
+        )
+
+        text = text.strip()
+
+        text = re.sub(
+            r"```json|```",
+            "",
+            text
+        ).strip()
+
+        start = text.find("{")
+        end = text.rfind("}") + 1
+
+        if start != -1 and end != -1:
+            text = text[start:end]
+
         return json.loads(text)
+
     except Exception as e:
+
         return {
-            "match_score": 0, "culture_fit_score": 0,
-            "strengths": [], "red_flags": [str(e)],
-            "missing_skills": [], "recommendation": "Reject",
+            "match_score": 0,
+            "culture_fit_score": 0,
+            "strengths": [],
+            "red_flags": [str(e)],
+            "missing_skills": [],
+            "related_skills": [],
+            "recommendation": "Reject",
             "reasoning": f"Analysis failed: {e}",
             "salary_estimate": "N/A",
             "interview_questions": []
@@ -702,7 +832,7 @@ class RecruitIQOrchestrator:
             # ── Agent 6: AI Deep Analyst ───────────────────────────────────────
             self._set_status(status_containers, "llm", "running")
             self.log("info","GeminiAnalystAgent",f"Running deep LLM analysis for {candidate_data['name']}")
-            ai_result = tool_gemini_deep_analyze(text, self.jd, self.role)
+            ai_result = tool_gemini_deep_analyze(text, self.jd, self.role,candidate_data["extracted_skills"],candidate_data["candidate_terms"])
             candidate_data["ai_score"] = ai_result.get("match_score", 0)
             candidate_data["culture_score"] = ai_result.get("culture_fit_score", 0)
             candidate_data["strengths"] = ai_result.get("strengths", [])
