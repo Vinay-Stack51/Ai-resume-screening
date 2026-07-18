@@ -239,6 +239,32 @@ html, body, [class*="css"] {
     line-height: 1.7;
 }
 
+/* Email preview box */
+.email-box {
+    background: #050810;
+    border: 1px solid #1E3A5F;
+    border-radius: 8px;
+    padding: 16px 18px;
+    font-size: 13px;
+    color: #CBD5E1;
+    white-space: pre-wrap;
+    line-height: 1.7;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.mail-link {
+    display: inline-block;
+    margin-top: 10px;
+    padding: 8px 18px;
+    background: linear-gradient(135deg, #3B82F6, #6366F1);
+    color: white !important;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 13px;
+    text-decoration: none !important;
+}
+.mail-link:hover { opacity: 0.85; }
+
 .stButton > button {
     background: linear-gradient(135deg, #3B82F6, #6366F1);
     color: white;
@@ -273,7 +299,8 @@ import sqlite3
 import json
 import time
 import base64
-from datetime import datetime
+import urllib.parse
+from datetime import datetime, date
 from PyPDF2 import PdfReader
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
@@ -735,6 +762,54 @@ AI REASONING
 ══════════════════════════════════
 """
 
+# ─── AGENT 9: INTERVIEW INVITATION / NOTIFICATION AGENT ───────────────────────
+def tool_generate_interview_email(
+    candidate: dict,
+    company_name: str,
+    role: str,
+    interview_date: str,
+    interview_time: str,
+    mode: str,
+    location_or_link: str,
+    hr_name: str,
+    hr_contact: str,
+) -> dict:
+    """
+    Agent Tool: Fills a HR-approved interview invitation template with
+    blanks (company name, role, date, time, mode, HR contact) that the
+    recruiter supplies once per batch. Does not send mail itself — it
+    produces a ready-to-send subject + body plus a mailto: link so the
+    HR can review and dispatch it from their own inbox.
+    """
+    candidate_name = candidate.get("name", "Candidate")
+    subject = f"Interview Invitation – {role} at {company_name}"
+
+    body = f"""Dear {candidate_name},
+
+Congratulations! Based on your profile and our initial screening for the {role} position at {company_name}, we would like to invite you for an interview.
+
+Interview Details:
+  Date      : {interview_date}
+  Time      : {interview_time}
+  Mode      : {mode}
+  Venue/Link: {location_or_link}
+
+Please reply to this email to confirm your availability. If the proposed slot does not work for you, let us know a couple of alternate times and we will try to accommodate you.
+
+Looking forward to speaking with you.
+
+Best regards,
+{hr_name}
+{company_name} – Talent Acquisition
+{hr_contact}"""
+
+    to_addr = candidate.get("email", "")
+    mailto = "mailto:" + urllib.parse.quote(to_addr) + \
+        "?subject=" + urllib.parse.quote(subject) + \
+        "&body=" + urllib.parse.quote(body)
+
+    return {"subject": subject, "body": body, "mailto": mailto, "to": to_addr}
+
 # ─── ORCHESTRATOR AGENT ───────────────────────────────────────────────────────
 
 class RecruitIQOrchestrator:
@@ -749,6 +824,7 @@ class RecruitIQOrchestrator:
     Agent 6 → AI Deep Analyst   (Gemini LLM evaluation)
     Agent 7 → Ranking Agent     (score & rank all candidates)
     Agent 8 → Report Agent      (final screening reports)
+    Agent 9 → Notification Agent (interview invitation drafts, HR-triggered)
     """
 
     def __init__(self, jd: str, role: str, required_skills: list,
@@ -910,6 +986,8 @@ if "results" not in st.session_state:
     st.session_state.results = []
 if "trace" not in st.session_state:
     st.session_state.trace = []
+if "emails" not in st.session_state:
+    st.session_state.emails = {}
 
 # ─── SIDEBAR ───────────────────────────────────────────────────────────────────
 with st.sidebar:
@@ -934,27 +1012,6 @@ with st.sidebar:
     min_cgpa = st.slider("Minimum CGPA", 0.0, 10.0, 6.5, 0.1)
 
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
-    # st.markdown("**🤖 Pipeline Agents**")
-    # agents_info = [
-    #     ("ParserAgent","PDF text extraction"),
-    #     ("ContactAgent","Name, phone, email"),
-    #     ("AcademicAgent","CGPA, education, exp"),
-    #     ("SkillAgent","Skill matching & gap"),
-    #     ("ProjectAgent","Project analysis"),
-    #     ("SimilarityAgent","TF-IDF JD match"),
-    #     ("GeminiAnalystAgent","LLM deep evaluation"),
-    #     ("RankingAgent","Composite scoring"),
-    #     ("ReportAgent","Report generation"),
-    # ]
-    # for name, desc in agents_info:
-    #     st.markdown(f"""
-    #     <div style="display:flex;justify-content:space-between;align-items:center;
-    #                 padding:6px 0;border-bottom:1px solid #1E2A4A">
-    #       <span style="font-size:12px;color:#93C5FD;font-weight:500">{name}</span>
-    #       <span style="font-size:11px;color:#64748B">{desc}</span>
-    #     </div>""", unsafe_allow_html=True)
-
-    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
     if st.button("🗑 Clear Database"):
         conn = sqlite3.connect("recruitiq.db")
         conn.execute("DELETE FROM screenings")
@@ -967,7 +1024,7 @@ with st.sidebar:
 st.markdown("""
 <div class="top-header">
   <h1>🧠Resume Screening</h1>
-  <p>Multi-agent orchestration: each resume passes through 9 specialized AI agents before a final hiring decision is made.</p>
+  <p>Multi-agent orchestration: each resume passes through a pipeline of specialized AI agents before a final hiring decision — and shortlisted candidates get a ready-to-send interview invitation.</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -1048,47 +1105,19 @@ if run_btn:
             required_projects=required_projects,
             min_cgpa=min_cgpa
         )
-        
+
         with st.spinner("🔍 Screening resumes..."):
             results = orchestrator.run(uploaded_files, status_containers)
-        
+
         # Mark all pipeline stages as completed
         for key in status_containers:
             orchestrator._set_status(status_containers, key, "done")
-        
+
         st.session_state.results = results
-        
+        st.session_state.trace = orchestrator.trace
+        st.session_state.emails = {}  # reset any previously generated drafts
+
         st.success(f"{len(results)} candidate(s) screened")
-
-        # Trace log placeholder
-
-        # st.markdown("**Live Agent Trace**")
-        # trace_placeholder = st.empty()
-
-        # # Run orchestrator
-        # orchestrator = RecruitIQOrchestrator(
-        #     jd=jd,
-        #     role=role_name,
-        #     required_skills=required_skills,
-        #     required_projects=required_projects,
-        #     min_cgpa=min_cgpa
-        # )
-
-        # with st.spinner(""):
-        #     results = orchestrator.run(uploaded_files, status_containers)
-
-        # # Update trace log live
-        # trace_html = "<div class='trace-log'>"
-        # for entry in orchestrator.trace:
-        #     css_class = {"info":"log-info","success":"log-success",
-        #                  "warn":"log-warn","error":"log-error"}.get(entry["level"],"")
-        #     trace_html += f'<div class="{css_class}">[{entry["ts"]}] [{entry["agent"]}] {entry["msg"]}</div>'
-        # trace_html += "</div>"
-        # trace_placeholder.markdown(trace_html, unsafe_allow_html=True)
-
-        # st.session_state.results = results
-        # st.session_state.trace = orchestrator.trace
-        # st.success(f"✅ Pipeline complete — {len(results)} candidate(s) screened")
 
 
 # ─── RESULTS ───────────────────────────────────────────────────────────────────
@@ -1149,7 +1178,79 @@ if st.session_state.results:
     df = pd.DataFrame(df_rows)
     st.dataframe(df, use_container_width=True, hide_index=True)
 
+    # ─── AGENT 9: INTERVIEW INVITATION PANEL ──────────────────────────────────
+    shortlisted = [r for r in results if ("Strong Hire" in r.get("decision","") or "Consider" in r.get("decision",""))]
+
+    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+    st.markdown("### 📧 Send Interview Invitations")
+
+    if not shortlisted:
+        st.info("No candidates were shortlisted (Strong Hire / Consider) from this run — nothing to invite yet.")
+    else:
+        st.markdown(f"""
+        <div style="background:#111827;border:1px solid #1E3A5F;border-radius:8px;
+                    padding:12px 16px;margin-bottom:12px;font-size:13px;color:#94A3B8">
+          ✅ {len(shortlisted)} candidate(s) shortlisted. Fill in the blanks below once — an
+          email draft is generated per candidate. Nothing is sent automatically; you review
+          and hit send (via the mailto link or your own mail client).
+        </div>""", unsafe_allow_html=True)
+
+        with st.form("interview_invite_form"):
+            fcol1, fcol2 = st.columns(2)
+            with fcol1:
+                company_name = st.text_input("Company Name *", placeholder="e.g. Infosys")
+                interview_role = st.text_input("Role *", value=role_name)
+                interview_date_val = st.date_input("Interview Date *", value=date.today())
+                interview_time = st.text_input("Interview Time *", placeholder="e.g. 10:30 AM IST")
+            with fcol2:
+                mode = st.selectbox("Interview Mode *", ["Online (Video Call)", "Telephonic", "In-Person"])
+                location_or_link = st.text_input(
+                    "Meeting Link / Venue Address *",
+                    placeholder="e.g. Google Meet link or office address"
+                )
+                hr_name = st.text_input("HR / Recruiter Name *", placeholder="e.g. Priya Sharma")
+                hr_contact = st.text_input("HR Contact (email/phone) *", placeholder="e.g. hr@company.com")
+
+            generate_btn = st.form_submit_button("✉️ Generate Invitation Drafts")
+
+        if generate_btn:
+            required_fields = [company_name, interview_role, interview_time, location_or_link, hr_name, hr_contact]
+            if not all(f.strip() for f in required_fields):
+                st.warning("Please fill in every field marked * before generating drafts.")
+            else:
+                emails = {}
+                for r in shortlisted:
+                    emails[r.get("name","Candidate")] = tool_generate_interview_email(
+                        candidate=r,
+                        company_name=company_name.strip(),
+                        role=interview_role.strip(),
+                        interview_date=interview_date_val.strftime("%d %B %Y"),
+                        interview_time=interview_time.strip(),
+                        mode=mode,
+                        location_or_link=location_or_link.strip(),
+                        hr_name=hr_name.strip(),
+                        hr_contact=hr_contact.strip(),
+                    )
+                st.session_state.emails = emails
+                st.success(f"Generated {len(emails)} invitation draft(s) below ⬇️")
+
+        if st.session_state.emails:
+            for r in shortlisted:
+                name = r.get("name","Candidate")
+                draft = st.session_state.emails.get(name)
+                if not draft:
+                    continue
+                with st.expander(f"✉️ {name} — {draft['to']}"):
+                    st.markdown(f"**Subject:** {draft['subject']}")
+                    st.markdown(f"<div class='email-box'>{draft['body']}</div>", unsafe_allow_html=True)
+                    st.markdown(
+                        f"<a class='mail-link' href='{draft['mailto']}' target='_blank'>📤 Open in Mail Client</a>",
+                        unsafe_allow_html=True
+                    )
+                    st.text_area("Copy manually if needed:", value=draft["body"], height=200, key=f"copy_{name}")
+
     # Detailed candidate cards
+    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
     st.markdown("### 🔍 Detailed Candidate Reports")
     for i, r in enumerate(results, 1):
         decision = r.get("decision","")
