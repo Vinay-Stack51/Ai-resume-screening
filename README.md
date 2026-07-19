@@ -52,6 +52,14 @@ The platform helps recruiters reduce manual screening effort while improving con
 * Culture Fit Score
 * Final Composite Ranking Score
 
+### Interview Invitation Automation
+
+* Automatically identifies shortlisted candidates (Strong Hire / Consider)
+* HR fills a one-time form with Company Name, Role, Interview Date, Time, Mode, Venue/Link and HR contact details
+* Generates a personalized interview invitation email draft for every shortlisted candidate
+* Provides a one-click "Open in Mail Client" (`mailto:`) link pre-filled with recipient, subject and body
+* Includes a copyable draft as a fallback for manual sending
+
 ### Reporting
 
 * Detailed candidate reports
@@ -63,19 +71,20 @@ The platform helps recruiters reduce manual screening effort while improving con
 
 ## Multi-Agent Architecture
 
-The system consists of nine specialized AI agents:
+The system consists of ten specialized AI agents:
 
-| Agent              | Responsibility                         |
-| ------------------ | -------------------------------------- |
-| ParserAgent        | Extracts text from resumes             |
-| ContactAgent       | Identifies candidate contact details   |
-| AcademicAgent      | Extracts education and experience      |
-| SkillAgent         | Performs skill extraction and matching |
-| ProjectAgent       | Analyzes candidate projects            |
-| SimilarityAgent    | Calculates resume-job similarity       |
-| GeminiAnalystAgent | Performs AI-based candidate evaluation |
-| RankingAgent       | Computes final candidate ranking       |
-| ReportAgent        | Generates recruitment reports          |
+| Agent                | Responsibility                              |
+| --------------------- | -------------------------------------------- |
+| ParserAgent           | Extracts text from resumes                   |
+| ContactAgent          | Identifies candidate contact details         |
+| AcademicAgent         | Extracts education and experience            |
+| SkillAgent            | Performs skill extraction and matching       |
+| ProjectAgent          | Analyzes candidate projects                  |
+| SimilarityAgent       | Calculates resume-job similarity             |
+| GeminiAnalystAgent    | Performs AI-based candidate evaluation       |
+| RankingAgent          | Computes final candidate ranking             |
+| ReportAgent           | Generates recruitment reports                |
+| NotificationAgent     | Drafts interview invitation emails for shortlisted candidates (HR-triggered, not auto-sent) |
 
 ---
 
@@ -107,6 +116,7 @@ The system consists of nine specialized AI agents:
 * Scikit-Learn
 * Regex
 * JSON
+* urllib (mailto link generation)
 
 ---
 
@@ -122,6 +132,9 @@ The system consists of nine specialized AI agents:
 8. Composite scores are calculated
 9. Candidates are ranked
 10. Detailed reports are generated
+11. Shortlisted candidates (Strong Hire / Consider) are surfaced for interview invitations
+12. HR fills in company name, role, date, time, mode and contact details once
+13. Personalized interview invitation drafts are generated per shortlisted candidate for HR to review and send
 
 ---
 
@@ -185,12 +198,14 @@ Add screenshots of:
 * Candidate Ranking Table
 * AI Evaluation Report
 * Final Hiring Recommendation
+* Interview Invitation Draft Generator
 
 ---
 
 ## Future Enhancements
 
-* Interview Scheduling
+* Automated SMTP/SendGrid email sending (direct send, not just draft generation)
+* Interview Scheduling (calendar sync)
 * Resume Fraud Detection
 * ATS Integration
 * LinkedIn Profile Analysis
@@ -206,5 +221,5 @@ Add screenshots of:
 * AI-Powered Candidate Evaluation
 * Automated Resume Screening
 * Intelligent Candidate Ranking
+* Automated Interview Invitation Drafting
 * Recruiter-Friendly Dashboard
-
